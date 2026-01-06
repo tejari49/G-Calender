@@ -24,7 +24,7 @@
     button.danger { background: transparent; border-color: rgba(255,106,106,.35); color: var(--danger); }
     input, textarea, select { width:100%; background: #0f1622; color: var(--text); border:1px solid var(--line); padding:10px 12px; border-radius:10px; outline:none; }
     textarea { resize: vertical; min-height: 80px; }
-    .wrap { display:grid; grid-template-columns: 1fr; gap:12px; padding:12px; max-width: 1400px; margin: 0 auto; }
+    .wrap { display:grid; grid-template-columns: 1fr; gap:12px; padding:12px; width: 100%; box-sizing: border-box; }
 
     .card { background: var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
     .card h2 { margin:0; padding:12px 14px; font-size:14px; color: var(--muted); border-bottom:1px solid var(--line); }
@@ -128,9 +128,148 @@
         border-radius: 0;
       }
     }
+    
+    /* Auth screen styles */
+    .auth-screen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .auth-screen.show { display: flex; }
+    .auth-box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 420px;
+      width: 100%;
+    }
+    .auth-box h1 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+    }
+    .auth-box p {
+      margin: 0 0 24px 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .auth-box label {
+      display: block;
+      margin-bottom: 16px;
+    }
+    .auth-box .hint {
+      display: block;
+      margin-bottom: 6px;
+    }
+    .auth-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .auth-tab {
+      padding: 12px 20px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .auth-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .code-display {
+      background: rgba(106,166,255,.08);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 16px;
+      margin: 16px 0;
+      text-align: center;
+    }
+    .code-display .code {
+      font-family: ui-monospace, monospace;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 2px;
+      margin: 8px 0;
+    }
+    .error-msg {
+      background: rgba(255,106,106,.08);
+      border: 1px solid var(--danger);
+      border-radius: 10px;
+      padding: 12px;
+      margin: 12px 0;
+      color: var(--danger);
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
+
+<!-- Auth Screen -->
+<div class="auth-screen show" id="authScreen">
+  <div class="auth-box">
+    <h1>G-Kalender</h1>
+    <p>Registrierung erforderlich für persönliche Termine</p>
+    
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="loginTab">Anmelden</button>
+      <button class="auth-tab" id="registerTab">Registrieren</button>
+    </div>
+    
+    <div id="errorMsg" class="error-msg" style="display:none;"></div>
+    
+    <!-- Login Form -->
+    <div id="loginForm">
+      <label>
+        <span class="hint">E-Mail</span>
+        <input type="email" id="loginEmail" placeholder="deine@email.de" />
+      </label>
+      <label>
+        <span class="hint">Passwort</span>
+        <input type="password" id="loginPassword" placeholder="••••••••" />
+      </label>
+      <button class="primary" id="loginBtn" style="width:100%;">Anmelden</button>
+    </div>
+    
+    <!-- Register Form -->
+    <div id="registerForm" style="display:none;">
+      <label>
+        <span class="hint">E-Mail</span>
+        <input type="email" id="registerEmail" placeholder="deine@email.de" />
+      </label>
+      <label>
+        <span class="hint">Passwort</span>
+        <input type="password" id="registerPassword" placeholder="••••••••" />
+      </label>
+      <label>
+        <span class="hint">Passwort bestätigen</span>
+        <input type="password" id="registerPasswordConfirm" placeholder="••••••••" />
+      </label>
+      <button class="primary" id="registerBtn" style="width:100%;">Registrieren</button>
+      
+      <!-- Personal Code Display (shown after registration) -->
+      <div id="codeDisplay" class="code-display" style="display:none;">
+        <div class="hint">Dein persönlicher Code:</div>
+        <div class="code" id="personalCode"></div>
+        <div class="hint" style="font-size:12px;">Speichere diesen Code sicher. Du kannst ihn unter deinem Profil jederzeit einsehen.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <header>
   <div class="left">
     <button id="prevBtn" title="Vorheriger Monat">◀</button>
@@ -219,16 +358,10 @@
 
         <div class="sep"></div>
 
-        <div style="display:flex; gap:10px; justify-content:space-between; align-items:center;">
-          <button id="exportBtn">Export .ics</button>
-          <label style="display:flex; gap:8px; align-items:center; user-select:none;">
-            <input id="firebaseToggle" type="checkbox" />
-            <span class="hint">Firebase Sync</span>
-          </label>
-        </div>
+        <button id="exportBtn" style="width:100%;">Export .ics</button>
 
         <div class="hint">
-          Offline-Speicher: IndexedDB. Optional: Firestore Sync (wenn du aktivierst).
+          Deine Termine werden automatisch mit Firebase synchronisiert.
         </div>
       </div>
       <div class="meta">
@@ -399,9 +532,9 @@
   }
 
   /**********************
-   * 2) Optional Firebase *
+   * 2) Firebase Auth    *
    **********************/
-  // Firebase is optional; we load dynamically only if enabled.
+  // Firebase is now REQUIRED for authentication.
   // ⚠️ IMPORTANT SECURITY WARNING:
   // Firebase config keys below are intentionally public (Firebase best practice).
   // However, you MUST configure proper Firestore security rules in Firebase Console.
@@ -418,35 +551,97 @@
   };
 
   let fb = {
-    enabled: false,
+    enabled: true, // Always enabled now
     app: null,
     db: null,
     auth: null,
-    user: null
+    user: null,
+    userCode: null
   };
+
+  function generatePersonalCode() {
+    // Generate a unique 8-character code
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
 
   async function ensureFirebase() {
     if (fb.app) return fb;
 
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js");
-    const { getFirestore, doc, setDoc, deleteDoc, getDocs, collection } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js");
-    const { getAuth, signInAnonymously, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js");
+    const { getFirestore, doc, setDoc, deleteDoc, getDocs, collection, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js");
+    const { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js");
 
     fb.app = initializeApp(firebaseConfig);
     fb.db = getFirestore(fb.app);
     fb.auth = getAuth(fb.app);
-    fb._firestore = { doc, setDoc, deleteDoc, getDocs, collection };
-    fb._authFns = { signInAnonymously, onAuthStateChanged };
+    fb._firestore = { doc, setDoc, deleteDoc, getDocs, collection, getDoc };
+    fb._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut };
 
-    // Anonymous login (minimal). For real app: email/password or Google sign-in.
-    await fb._authFns.signInAnonymously(fb.auth);
-
-    fb._authFns.onAuthStateChanged(fb.auth, (u) => {
-      fb.user = u || null;
-      renderDebug();
+    // Wait for auth state
+    return new Promise((resolve) => {
+      fb._authFns.onAuthStateChanged(fb.auth, async (u) => {
+        fb.user = u || null;
+        if (fb.user) {
+          // Load user's personal code
+          const userDoc = await fb._firestore.getDoc(fb._firestore.doc(fb.db, `users/${fb.user.uid}`));
+          if (userDoc.exists()) {
+            fb.userCode = userDoc.data().personalCode;
+          }
+          hideAuthScreen();
+        } else {
+          showAuthScreen();
+        }
+        renderDebug();
+        resolve(fb);
+      });
     });
+  }
 
-    return fb;
+  async function registerUser(email, password) {
+    await ensureFirebase();
+    const { createUserWithEmailAndPassword } = fb._authFns;
+    const userCred = await createUserWithEmailAndPassword(fb.auth, email, password);
+    
+    // Generate and store personal code
+    const personalCode = generatePersonalCode();
+    const { doc, setDoc } = fb._firestore;
+    await setDoc(doc(fb.db, `users/${userCred.user.uid}`), {
+      email: email,
+      personalCode: personalCode,
+      createdAt: Date.now()
+    });
+    
+    fb.userCode = personalCode;
+    return personalCode;
+  }
+
+  async function loginUser(email, password) {
+    await ensureFirebase();
+    const { signInWithEmailAndPassword } = fb._authFns;
+    const userCred = await signInWithEmailAndPassword(fb.auth, email, password);
+    
+    // Load personal code
+    const { doc, getDoc } = fb._firestore;
+    const userDoc = await getDoc(doc(fb.db, `users/${userCred.user.uid}`));
+    if (userDoc.exists()) {
+      fb.userCode = userDoc.data().personalCode;
+    }
+    
+    return fb.userCode;
+  }
+
+  async function logoutUser() {
+    if (fb.auth) {
+      await fb._authFns.signOut(fb.auth);
+      fb.user = null;
+      fb.userCode = null;
+      showAuthScreen();
+    }
   }
 
   async function fbPath() {
@@ -509,9 +704,17 @@
   function renderDebug() {
     const parts = [];
     parts.push(`events=${state.events.length}`);
-    parts.push(`firebase=${fb.enabled ? "on" : "off"}`);
-    if (fb.enabled) parts.push(`user=${fb.user?.uid ?? "…"}`);
+    parts.push(`user=${fb.user?.email ?? "not logged in"}`);
+    if (fb.userCode) parts.push(`code=${fb.userCode}`);
     $("debug").textContent = parts.join(" | ");
+  }
+
+  function showAuthScreen() {
+    $("authScreen").classList.add("show");
+  }
+
+  function hideAuthScreen() {
+    $("authScreen").classList.remove("show");
   }
 
   function updateNetStatus() {
@@ -736,7 +939,7 @@
 
     await dbPut(ev);
 
-    if (fb.enabled && navigator.onLine) {
+    if (navigator.onLine) {
       try { await fbUpsert(ev); } catch (e) { console.warn("Firebase upsert failed:", e); }
     }
 
@@ -750,7 +953,7 @@
     if (!confirm("Termin wirklich löschen?")) return;
 
     await dbDelete(id);
-    if (fb.enabled && navigator.onLine) {
+    if (navigator.onLine) {
       try { await fbRemove(id); } catch (e) { console.warn("Firebase delete failed:", e); }
     }
     await reload();
@@ -774,8 +977,8 @@
   }
 
   async function reload() {
-    // Optionally pull remote to local when online
-    if (fb.enabled && navigator.onLine) {
+    // Pull remote to local when online
+    if (navigator.onLine && fb.user) {
       try { await fbPullToLocal(); } catch (e) { console.warn("Firebase pull failed:", e); }
     }
     state.events = await dbGetAll();
@@ -809,6 +1012,94 @@
   /********************
    * 4) Wire events   *
    *********************/
+  // Auth UI handlers
+  $("loginTab").onclick = () => {
+    $("loginTab").classList.add("active");
+    $("registerTab").classList.remove("active");
+    $("loginForm").style.display = "block";
+    $("registerForm").style.display = "none";
+    $("errorMsg").style.display = "none";
+  };
+
+  $("registerTab").onclick = () => {
+    $("registerTab").classList.add("active");
+    $("loginTab").classList.remove("active");
+    $("registerForm").style.display = "block";
+    $("loginForm").style.display = "none";
+    $("errorMsg").style.display = "none";
+    $("codeDisplay").style.display = "none";
+  };
+
+  $("loginBtn").onclick = async () => {
+    const email = $("loginEmail").value.trim();
+    const password = $("loginPassword").value;
+    
+    if (!email || !password) {
+      $("errorMsg").textContent = "Bitte E-Mail und Passwort eingeben.";
+      $("errorMsg").style.display = "block";
+      return;
+    }
+    
+    try {
+      $("loginBtn").disabled = true;
+      $("loginBtn").textContent = "Anmelden...";
+      await loginUser(email, password);
+      await reload();
+    } catch (error) {
+      $("errorMsg").textContent = "Anmeldung fehlgeschlagen: " + error.message;
+      $("errorMsg").style.display = "block";
+      $("loginBtn").disabled = false;
+      $("loginBtn").textContent = "Anmelden";
+    }
+  };
+
+  $("registerBtn").onclick = async () => {
+    const email = $("registerEmail").value.trim();
+    const password = $("registerPassword").value;
+    const passwordConfirm = $("registerPasswordConfirm").value;
+    
+    if (!email || !password || !passwordConfirm) {
+      $("errorMsg").textContent = "Bitte alle Felder ausfüllen.";
+      $("errorMsg").style.display = "block";
+      return;
+    }
+    
+    if (password !== passwordConfirm) {
+      $("errorMsg").textContent = "Passwörter stimmen nicht überein.";
+      $("errorMsg").style.display = "block";
+      return;
+    }
+    
+    if (password.length < 6) {
+      $("errorMsg").textContent = "Passwort muss mindestens 6 Zeichen lang sein.";
+      $("errorMsg").style.display = "block";
+      return;
+    }
+    
+    try {
+      $("registerBtn").disabled = true;
+      $("registerBtn").textContent = "Registrieren...";
+      const code = await registerUser(email, password);
+      
+      // Show personal code
+      $("personalCode").textContent = code;
+      $("codeDisplay").style.display = "block";
+      $("errorMsg").style.display = "none";
+      
+      // Auto-hide auth screen and load calendar after 5 seconds
+      setTimeout(async () => {
+        hideAuthScreen();
+        await reload();
+      }, 5000);
+    } catch (error) {
+      $("errorMsg").textContent = "Registrierung fehlgeschlagen: " + error.message;
+      $("errorMsg").style.display = "block";
+      $("registerBtn").disabled = false;
+      $("registerBtn").textContent = "Registrieren";
+    }
+  };
+
+  // Calendar UI handlers
   $("prevBtn").onclick = async () => { state.cursor.setMonth(state.cursor.getMonth() - 1); renderCalendar(); };
   $("nextBtn").onclick = async () => { state.cursor.setMonth(state.cursor.getMonth() + 1); renderCalendar(); };
   $("todayBtn").onclick = async () => { state.cursor = new Date(); state.selectedDay = new Date(); await reload(); };
@@ -834,17 +1125,6 @@
     renderList();
   });
 
-  $("firebaseToggle").addEventListener("change", async () => {
-    fb.enabled = $("firebaseToggle").checked;
-    if (fb.enabled) {
-      if (!navigator.onLine) {
-        alert("Firebase Sync benötigt Internet. Offline läuft weiterhin IndexedDB.");
-      }
-      try { await ensureFirebase(); } catch (e) { alert("Firebase konnte nicht geladen werden: " + e); fb.enabled = false; $("firebaseToggle").checked = false; }
-    }
-    await reload();
-  });
-
   // ESC key to close modal
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && $("dayModal").classList.contains("show")) {
@@ -859,10 +1139,15 @@
    * 5) Start         *
    ********************/
   updateNetStatus();
+  // Initialize Firebase and check auth state
+  await ensureFirebase();
   // Default: show selected day = today
   state.selectedDay = new Date();
   clearForm();
-  await reload();
+  // Only reload if user is logged in
+  if (fb.user) {
+    await reload();
+  }
 </script>
 </body>
 </html>
