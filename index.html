@@ -327,7 +327,11 @@
    * 2) Optional Firebase *
    **********************/
   // Firebase is optional; we load dynamically only if enabled.
-  // NOTE: You must set Firestore rules; otherwise this is insecure.
+  // ⚠️ IMPORTANT SECURITY WARNING:
+  // Firebase config keys below are intentionally public (Firebase best practice).
+  // However, you MUST configure proper Firestore security rules in Firebase Console.
+  // Without proper rules, anyone can read/write your data!
+  // Example rule for production: allow read, write: if request.auth != null && request.auth.uid == userId;
   const firebaseConfig = {
     apiKey: "AIzaSyCLqi-PxHdeyt51u9i50tY0NhOAUbutW9g",
     authDomain: "calender-rai.firebaseapp.com",
