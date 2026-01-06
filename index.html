@@ -121,7 +121,6 @@
     .modal-body {
       padding: 0;
     }
-    .right { display:flex; flex-direction:column; gap:12px; }
     @media (max-width: 768px) {
       .modal-content { 
         max-width: 100%; 
@@ -669,8 +668,6 @@
     clearForm();
     $("start").value = toLocalInput(s);
     $("end").value = toLocalInput(e);
-    // Focus will happen when modal opens
-    setTimeout(() => $("title").focus(), 100);
   }
 
   function clearForm() {
@@ -744,7 +741,7 @@
     }
 
     await reload();
-    loadToForm(id);
+    closeModal();
   }
 
   async function deleteFromForm() {
@@ -757,7 +754,7 @@
       try { await fbRemove(id); } catch (e) { console.warn("Firebase delete failed:", e); }
     }
     await reload();
-    clearForm();
+    closeModal();
   }
 
   async function exportICS() {
@@ -793,6 +790,10 @@
   function openModal() {
     $("dayModal").classList.add("show");
     document.body.style.overflow = "hidden";
+    // Focus title field after modal animation
+    requestAnimationFrame(() => {
+      $("title").focus();
+    });
   }
 
   function closeModal() {
