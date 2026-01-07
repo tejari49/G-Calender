@@ -1,0 +1,1153 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Calendar (Offline + optional Firebase)</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #121824;
+      --muted: #8aa0b4;
+      --text: #e7eef7;
+      --accent: #6aa6ff;
+      --danger: #ff6a6a;
+      --ok: #6aff9a;
+      --line: rgba(255,255,255,.08);
+    }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: var(--bg); color: var(--text); }
+    header { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(11,15,20,.9); backdrop-filter: blur(8px); }
+    header .left { display:flex; gap:10px; align-items:center; }
+    button { background: var(--panel); color: var(--text); border:1px solid var(--line); padding:9px 12px; border-radius:10px; cursor:pointer; }
+    button:hover { border-color: rgba(255,255,255,.18); }
+    button.primary { background: var(--accent); color:#06121f; border-color: transparent; font-weight:700; }
+    button.danger { background: transparent; border-color: rgba(255,106,106,.35); color: var(--danger); }
+    input, textarea, select { width:100%; background: #0f1622; color: var(--text); border:1px solid var(--line); padding:10px 12px; border-radius:10px; outline:none; }
+    textarea { resize: vertical; min-height: 80px; }
+    .wrap { display:grid; grid-template-columns: 1fr; gap:12px; padding:12px; width: 100%; box-sizing: border-box; }
+
+    .card { background: var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+    .card h2 { margin:0; padding:12px 14px; font-size:14px; color: var(--muted); border-bottom:1px solid var(--line); }
+    .calendar { padding:12px; }
+    .cal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 0 10px 0; }
+    .month-title { font-weight:800; letter-spacing:.2px; }
+    .grid { display:grid; grid-template-columns: repeat(7, 1fr); gap:8px; }
+    .dow { color: var(--muted); font-size:12px; padding:0 0 6px 2px; }
+    .day {
+      border:1px solid var(--line); border-radius:12px; min-height:86px; padding:8px;
+      background: rgba(255,255,255,.02);
+      display:flex; flex-direction:column; gap:6px;
+    }
+    .day .top { display:flex; align-items:center; justify-content:space-between; }
+    .day .num { font-size:12px; color: var(--muted); }
+    .day.today { outline: 2px solid rgba(106,166,255,.45); }
+    .day.out { opacity:.45; }
+    .pill {
+      font-size:12px; padding:6px 8px; border-radius:10px; border:1px solid var(--line);
+      display:flex; justify-content:space-between; gap:8px; align-items:center;
+      background: rgba(106,166,255,.08);
+    }
+    .pill .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 220px; }
+    .pill small { color: var(--muted); }
+    .right { display:flex; flex-direction:column; gap:12px; }
+    .form { padding:12px; display:flex; flex-direction:column; gap:10px; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .meta { padding:12px; display:flex; flex-direction:column; gap:8px; color: var(--muted); font-size:12px; border-top:1px solid var(--line); }
+    .list { padding:12px; display:flex; flex-direction:column; gap:8px; max-height: 360px; overflow:auto; }
+    .event-item { border:1px solid var(--line); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:6px; background: rgba(255,255,255,.02); }
+    .event-item .a { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .tag { font-size:11px; color: var(--muted); }
+    .hint { color: var(--muted); font-size: 12px; }
+    .status { display:inline-flex; gap:8px; align-items:center; font-size:12px; color: var(--muted); }
+    .dot { width:8px; height:8px; border-radius: 99px; background: var(--danger); }
+    .dot.ok { background: var(--ok); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono"; font-size: 11px; color: var(--muted); }
+    .sep { height:1px; background: var(--line); margin:8px 0; }
+    
+    /* Modal styles */
+    .modal-overlay { 
+      position: fixed; 
+      top: 0; 
+      left: 0; 
+      right: 0; 
+      bottom: 0; 
+      background: rgba(0,0,0,.7); 
+      backdrop-filter: blur(4px); 
+      display: none; 
+      align-items: center; 
+      justify-content: center; 
+      z-index: 1000; 
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-content { 
+      background: var(--bg); 
+      border-radius: 16px; 
+      max-width: 900px; 
+      width: 100%; 
+      max-height: 90vh; 
+      overflow-y: auto; 
+      position: relative;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+    .modal-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 4px 8px;
+      line-height: 1;
+    }
+    .modal-close:hover {
+      color: var(--text);
+    }
+    .modal-body {
+      padding: 0;
+    }
+    @media (max-width: 768px) {
+      .modal-content { 
+        max-width: 100%; 
+        max-height: 100vh; 
+        border-radius: 0;
+      }
+    }
+    
+    /* Auth screen styles */
+    .auth-screen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .auth-screen.show { display: flex; }
+    .auth-box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 420px;
+      width: 100%;
+    }
+    .auth-box h1 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+    }
+    .auth-box p {
+      margin: 0 0 24px 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .auth-box label {
+      display: block;
+      margin-bottom: 16px;
+    }
+    .auth-box .hint {
+      display: block;
+      margin-bottom: 6px;
+    }
+    .auth-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .auth-tab {
+      padding: 12px 20px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .auth-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .code-display {
+      background: rgba(106,166,255,.08);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 16px;
+      margin: 16px 0;
+      text-align: center;
+    }
+    .code-display .code {
+      font-family: ui-monospace, monospace;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 2px;
+      margin: 8px 0;
+    }
+    .error-msg {
+      background: rgba(255,106,106,.08);
+      border: 1px solid var(--danger);
+      border-radius: 10px;
+      padding: 12px;
+      margin: 12px 0;
+      color: var(--danger);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth Screen -->
+<div class="auth-screen show" id="authScreen">
+  <div class="auth-box">
+    <h1>G-Kalender</h1>
+    <p>Registrierung erforderlich für persönliche Termine</p>
+    
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="loginTab">Anmelden</button>
+      <button class="auth-tab" id="registerTab">Registrieren</button>
+    </div>
+    
+    <div id="errorMsg" class="error-msg" style="display:none;"></div>
+    
+    <!-- Login Form -->
+    <div id="loginForm">
+      <label>
+        <span class="hint">E-Mail</span>
+        <input type="email" id="loginEmail" placeholder="deine@email.de" />
+      </label>
+      <label>
+        <span class="hint">Passwort</span>
+        <input type="password" id="loginPassword" placeholder="••••••••" />
+      </label>
+      <button class="primary" id="loginBtn" style="width:100%;">Anmelden</button>
+    </div>
+    
+    <!-- Register Form -->
+    <div id="registerForm" style="display:none;">
+      <label>
+        <span class="hint">E-Mail</span>
+        <input type="email" id="registerEmail" placeholder="deine@email.de" />
+      </label>
+      <label>
+        <span class="hint">Passwort</span>
+        <input type="password" id="registerPassword" placeholder="••••••••" />
+      </label>
+      <label>
+        <span class="hint">Passwort bestätigen</span>
+        <input type="password" id="registerPasswordConfirm" placeholder="••••••••" />
+      </label>
+      <button class="primary" id="registerBtn" style="width:100%;">Registrieren</button>
+      
+      <!-- Personal Code Display (shown after registration) -->
+      <div id="codeDisplay" class="code-display" style="display:none;">
+        <div class="hint">Dein persönlicher Code:</div>
+        <div class="code" id="personalCode"></div>
+        <div class="hint" style="font-size:12px;">Speichere diesen Code sicher. Du kannst ihn unter deinem Profil jederzeit einsehen.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="left">
+    <button id="prevBtn" title="Vorheriger Monat">◀</button>
+    <button id="todayBtn" title="Heute">Heute</button>
+    <button id="nextBtn" title="Nächster Monat">▶</button>
+    <div class="month-title" id="monthTitle"></div>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <input id="search" placeholder="Suche (Titel, Ort, Notiz)..." style="width: 320px; max-width: 44vw;" />
+    <button class="primary" id="newBtn">+ Termin</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>Monatsansicht</h2>
+    <div class="calendar">
+      <div class="grid dow" id="dow"></div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </section>
+</div>
+
+<!-- Modal for day details -->
+<div class="modal-overlay" id="dayModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modalTitle">Termin</h2>
+      <button class="modal-close" id="closeModal" title="Schließen">×</button>
+    </div>
+    <div class="modal-body">
+      <aside class="right" style="padding: 0;">
+        <section class="card" style="border: none; border-radius: 0;">
+          <h2 id="formTitle">Termin</h2>
+          <div class="form">
+            <input id="id" type="hidden" />
+            <label>
+              <div class="hint">Titel</div>
+              <input id="title" placeholder="z.B. Zahnarzt, Meeting…" />
+            </label>
+
+        <div class="row">
+          <label>
+            <div class="hint">Start</div>
+            <input id="start" type="datetime-local" />
+          </label>
+          <label>
+            <div class="hint">Ende</div>
+            <input id="end" type="datetime-local" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            <div class="hint">Ganztägig</div>
+            <select id="allDay">
+              <option value="false">Nein</option>
+              <option value="true">Ja</option>
+            </select>
+          </label>
+          <label>
+            <div class="hint">Wiederholung</div>
+            <select id="rrule">
+              <option value="">Keine</option>
+              <option value="FREQ=DAILY">Täglich</option>
+              <option value="FREQ=WEEKLY">Wöchentlich</option>
+              <option value="FREQ=MONTHLY">Monatlich</option>
+              <option value="FREQ=YEARLY">Jährlich</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          <div class="hint">Ort</div>
+          <input id="location" placeholder="z.B. Berlin, Online, Raum 2.13" />
+        </label>
+        <label>
+          <div class="hint">Notiz</div>
+          <textarea id="notes" placeholder="Agenda / Details…"></textarea>
+        </label>
+
+        <div class="row">
+          <button id="saveBtn" class="primary">Speichern</button>
+          <button id="deleteBtn" class="danger" disabled>Löschen</button>
+        </div>
+
+        <div class="sep"></div>
+
+        <button id="exportBtn" style="width:100%;">Export .ics</button>
+
+        <div class="hint">
+          Deine Termine werden automatisch mit Firebase synchronisiert.
+        </div>
+      </div>
+      <div class="meta">
+        <div class="status"><span class="dot" id="netDot"></span><span id="netText"></span></div>
+        <div class="mono" id="debug"></div>
+      </div>
+    </section>
+
+    <section class="card" style="border: none; border-radius: 0; border-top: 1px solid var(--line);">
+      <h2>Termine (gefiltert)</h2>
+      <div class="list" id="list"></div>
+    </section>
+  </aside>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  /***************
+   * 0) Utilities *
+   ***************/
+  const pad = (n) => String(n).padStart(2, "0");
+  const toLocalInput = (d) => {
+    // yyyy-mm-ddThh:mm in local time
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mi = pad(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  };
+  const fromLocalInput = (s) => s ? new Date(s) : null;
+  const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0);
+  const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23,59,59,999);
+  const uid = () => crypto.randomUUID ? crypto.randomUUID() : `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  // Very small RRULE support: FREQ=DAILY|WEEKLY|MONTHLY|YEARLY (no BYDAY/BYSETPOS etc.)
+  function occursOnDay(ev, dayDate) {
+    const dayStart = startOfDay(dayDate);
+    const dayEnd = endOfDay(dayDate);
+
+    const s = new Date(ev.start);
+    const e = new Date(ev.end);
+
+    // If no recurrence: any overlap with this day
+    if (!ev.rrule) return (s <= dayEnd && e >= dayStart);
+
+    const freq = String(ev.rrule).split(";").find(x => x.startsWith("FREQ="))?.split("=")[1];
+    if (!freq) return false;
+    if (dayStart < startOfDay(s)) return false; // before first instance
+
+    // Determine if this day matches recurrence anchored to start date
+    const anchor = startOfDay(s);
+
+    const diffDays = Math.floor((dayStart - anchor) / (24*3600*1000));
+
+    if (freq === "DAILY") return diffDays >= 0;
+
+    if (freq === "WEEKLY") return (diffDays >= 0) && (dayStart.getDay() === anchor.getDay());
+
+    if (freq === "MONTHLY") {
+      return (dayStart.getDate() === anchor.getDate()) && (dayStart >= anchor);
+    }
+
+    if (freq === "YEARLY") {
+      return (dayStart.getDate() === anchor.getDate()) &&
+             (dayStart.getMonth() === anchor.getMonth()) &&
+             (dayStart >= anchor);
+    }
+
+    return false;
+  }
+
+  function formatTimeRange(ev) {
+    const s = new Date(ev.start);
+    const e = new Date(ev.end);
+    if (ev.allDay) return "Ganztägig";
+    return `${pad(s.getHours())}:${pad(s.getMinutes())}–${pad(e.getHours())}:${pad(e.getMinutes())}`;
+  }
+
+  function icsEscape(s) {
+    return String(s ?? "")
+      .replaceAll("\\", "\\\\")
+      .replaceAll("\n", "\\n")
+      .replaceAll(",", "\\,")
+      .replaceAll(";", "\\;");
+  }
+  function toICSDate(dt) {
+    // Use UTC format YYYYMMDDTHHMMSSZ
+    const d = new Date(dt);
+    return d.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".000", "");
+  }
+  function eventToICS(ev) {
+    const lines = [];
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:${icsEscape(ev.id)}`);
+    lines.push(`DTSTAMP:${toICSDate(Date.now())}`);
+    if (ev.allDay) {
+      const sd = new Date(ev.start);
+      const ed = new Date(ev.end);
+      // All-day in ICS is DATE, end is exclusive, keep it simple:
+      const sdStr = `${sd.getFullYear()}${pad(sd.getMonth()+1)}${pad(sd.getDate())}`;
+      const edPlus = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate() + 1);
+      const edStr = `${edPlus.getFullYear()}${pad(edPlus.getMonth()+1)}${pad(edPlus.getDate())}`;
+      lines.push(`DTSTART;VALUE=DATE:${sdStr}`);
+      lines.push(`DTEND;VALUE=DATE:${edStr}`);
+    } else {
+      lines.push(`DTSTART:${toICSDate(ev.start)}`);
+      lines.push(`DTEND:${toICSDate(ev.end)}`);
+    }
+    if (ev.rrule) lines.push(`RRULE:${icsEscape(ev.rrule)}`);
+    lines.push(`SUMMARY:${icsEscape(ev.title)}`);
+    if (ev.location) lines.push(`LOCATION:${icsEscape(ev.location)}`);
+    if (ev.notes) lines.push(`DESCRIPTION:${icsEscape(ev.notes)}`);
+    lines.push("END:VEVENT");
+    return lines.join("\r\n");
+  }
+
+  /********************
+   * 1) Local storage *
+   ********************/
+  const DB_NAME = "mini-calendar-db";
+  const DB_STORE = "events";
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        const store = db.createObjectStore(DB_STORE, { keyPath: "id" });
+        store.createIndex("start", "start");
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function dbGetAll() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const store = tx.objectStore(DB_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function dbPut(ev) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(ev);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function dbDelete(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).delete(id);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  /**********************
+   * 2) Firebase Auth    *
+   **********************/
+  // Firebase is now REQUIRED for authentication.
+  // ⚠️ IMPORTANT SECURITY WARNING:
+  // Firebase config keys below are intentionally public (Firebase best practice).
+  // However, you MUST configure proper Firestore security rules in Firebase Console.
+  // Without proper rules, anyone can read/write your data!
+  // Example rule for production: allow read, write: if request.auth != null && request.auth.uid == userId;
+  const firebaseConfig = {
+    apiKey: "AIzaSyCLqi-PxHdeyt51u9i50tY0NhOAUbutW9g",
+    authDomain: "calender-rai.firebaseapp.com",
+    projectId: "calender-rai",
+    storageBucket: "calender-rai.firebasestorage.app",
+    messagingSenderId: "989981793002",
+    appId: "1:989981793002:web:63e97152d444fd4c649593",
+    measurementId: "G-5FBF6XQEW8"
+  };
+
+  let fb = {
+    enabled: true, // Always enabled now
+    app: null,
+    db: null,
+    auth: null,
+    user: null,
+    userCode: null
+  };
+
+  function generatePersonalCode() {
+    // Generate a unique 8-character code
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  async function ensureFirebase() {
+    if (fb.app) return fb;
+
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js");
+    const { getFirestore, doc, setDoc, deleteDoc, getDocs, collection, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js");
+    const { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js");
+
+    fb.app = initializeApp(firebaseConfig);
+    fb.db = getFirestore(fb.app);
+    fb.auth = getAuth(fb.app);
+    fb._firestore = { doc, setDoc, deleteDoc, getDocs, collection, getDoc };
+    fb._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut };
+
+    // Wait for auth state
+    return new Promise((resolve) => {
+      fb._authFns.onAuthStateChanged(fb.auth, async (u) => {
+        fb.user = u || null;
+        if (fb.user) {
+          // Load user's personal code
+          const userDoc = await fb._firestore.getDoc(fb._firestore.doc(fb.db, `users/${fb.user.uid}`));
+          if (userDoc.exists()) {
+            fb.userCode = userDoc.data().personalCode;
+          }
+          hideAuthScreen();
+        } else {
+          showAuthScreen();
+        }
+        renderDebug();
+        resolve(fb);
+      });
+    });
+  }
+
+  async function registerUser(email, password) {
+    await ensureFirebase();
+    const { createUserWithEmailAndPassword } = fb._authFns;
+    const userCred = await createUserWithEmailAndPassword(fb.auth, email, password);
+    
+    // Generate and store personal code
+    const personalCode = generatePersonalCode();
+    const { doc, setDoc } = fb._firestore;
+    await setDoc(doc(fb.db, `users/${userCred.user.uid}`), {
+      email: email,
+      personalCode: personalCode,
+      createdAt: Date.now()
+    });
+    
+    fb.userCode = personalCode;
+    return personalCode;
+  }
+
+  async function loginUser(email, password) {
+    await ensureFirebase();
+    const { signInWithEmailAndPassword } = fb._authFns;
+    const userCred = await signInWithEmailAndPassword(fb.auth, email, password);
+    
+    // Load personal code
+    const { doc, getDoc } = fb._firestore;
+    const userDoc = await getDoc(doc(fb.db, `users/${userCred.user.uid}`));
+    if (userDoc.exists()) {
+      fb.userCode = userDoc.data().personalCode;
+    }
+    
+    return fb.userCode;
+  }
+
+  async function logoutUser() {
+    if (fb.auth) {
+      await fb._authFns.signOut(fb.auth);
+      fb.user = null;
+      fb.userCode = null;
+      showAuthScreen();
+    }
+  }
+
+  async function fbPath() {
+    // One collection per user
+    if (!fb.user) return null;
+    return `users/${fb.user.uid}/events`;
+  }
+
+  async function fbPullToLocal() {
+    await ensureFirebase();
+    const path = await fbPath();
+    if (!path) return;
+
+    const { collection, getDocs } = fb._firestore;
+    const snap = await getDocs(collection(fb.db, path));
+    const remote = [];
+    snap.forEach(d => remote.push({ id: d.id, ...d.data() }));
+
+    // naive merge: remote overwrites local if has newer updatedAt
+    const local = await dbGetAll();
+    const map = new Map(local.map(e => [e.id, e]));
+    for (const r of remote) {
+      const l = map.get(r.id);
+      if (!l || (r.updatedAt || 0) > (l.updatedAt || 0)) {
+        await dbPut(r);
+      }
+    }
+  }
+
+  async function fbUpsert(ev) {
+    await ensureFirebase();
+    const path = await fbPath();
+    if (!path) return;
+    const { doc, setDoc } = fb._firestore;
+    await setDoc(doc(fb.db, path, ev.id), ev, { merge: true });
+  }
+
+  async function fbRemove(id) {
+    await ensureFirebase();
+    const path = await fbPath();
+    if (!path) return;
+    const { doc, deleteDoc } = fb._firestore;
+    await deleteDoc(doc(fb.db, path, id));
+  }
+
+  /********************
+   * 3) UI + state    *
+   ********************/
+  const $ = (id) => document.getElementById(id);
+
+  const state = {
+    cursor: new Date(),
+    events: [],
+    filter: "",
+    selectedDay: null
+  };
+
+  const DOW = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+
+  function renderDebug() {
+    const parts = [];
+    parts.push(`events=${state.events.length}`);
+    parts.push(`user=${fb.user?.email ?? "not logged in"}`);
+    if (fb.userCode) parts.push(`code=${fb.userCode}`);
+    $("debug").textContent = parts.join(" | ");
+  }
+
+  function showAuthScreen() {
+    $("authScreen").classList.add("show");
+  }
+
+  function hideAuthScreen() {
+    $("authScreen").classList.remove("show");
+  }
+
+  function updateNetStatus() {
+    const online = navigator.onLine;
+    $("netDot").className = "dot" + (online ? " ok" : "");
+    $("netText").textContent = online ? "Online" : "Offline";
+  }
+
+  function startEndOfMonthView(date) {
+    const first = new Date(date.getFullYear(), date.getMonth(), 1);
+    const last = new Date(date.getFullYear(), date.getMonth()+1, 0);
+    // Monday-based grid: compute start = Monday before/at first
+    const firstDow = (first.getDay() + 6) % 7; // Mon=0..Sun=6
+    const start = new Date(first);
+    start.setDate(first.getDate() - firstDow);
+
+    const lastDow = (last.getDay() + 6) % 7;
+    const end = new Date(last);
+    end.setDate(last.getDate() + (6 - lastDow));
+    return { start, end, first, last };
+  }
+
+  function filteredEvents() {
+    const q = state.filter.trim().toLowerCase();
+    if (!q) return state.events.slice();
+    return state.events.filter(e =>
+      (e.title || "").toLowerCase().includes(q) ||
+      (e.location || "").toLowerCase().includes(q) ||
+      (e.notes || "").toLowerCase().includes(q)
+    );
+  }
+
+  function eventsForDay(dayDate) {
+    const list = filteredEvents().filter(ev => occursOnDay(ev, dayDate));
+    list.sort((a,b) => new Date(a.start) - new Date(b.start));
+    return list;
+  }
+
+  function renderCalendar() {
+    const { start, end, first } = startEndOfMonthView(state.cursor);
+    const monthName = state.cursor.toLocaleString("de-DE", { month: "long", year: "numeric" });
+    $("monthTitle").textContent = monthName;
+
+    $("dow").innerHTML = DOW.map(d => `<div>${d}</div>`).join("");
+
+    const grid = $("grid");
+    grid.innerHTML = "";
+
+    const today = new Date();
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+      const cell = document.createElement("div");
+      cell.className = "day";
+
+      const inMonth = d.getMonth() === first.getMonth();
+      if (!inMonth) cell.classList.add("out");
+      if (ymd(d) === ymd(today)) cell.classList.add("today");
+
+      const top = document.createElement("div");
+      top.className = "top";
+      top.innerHTML = `<div class="num">${d.getDate()}</div>
+                       <button style="padding:4px 8px; border-radius:10px;" title="Neuer Termin">+</button>`;
+      top.querySelector("button").onclick = (e) => {
+        e.stopPropagation();
+        state.selectedDay = new Date(d);
+        openNewEventForDay(d);
+        updateModalTitle(new Date(d));
+        openModal();
+      };
+      cell.appendChild(top);
+
+      const evs = eventsForDay(d).slice(0,3);
+      for (const ev of evs) {
+        const pill = document.createElement("div");
+        pill.className = "pill";
+        pill.title = ev.title;
+        pill.innerHTML = `<span class="t">${escapeHtml(ev.title || "(ohne Titel)")}</span><small>${formatTimeRange(ev)}</small>`;
+        pill.onclick = (e) => { 
+          e.stopPropagation(); 
+          loadToForm(ev.id); 
+          updateModalTitle(state.selectedDay || new Date());
+          openModal();
+        };
+        cell.appendChild(pill);
+      }
+      const total = eventsForDay(d).length;
+      if (total > 3) {
+        const more = document.createElement("div");
+        more.className = "tag";
+        more.textContent = `+${total - 3} mehr…`;
+        cell.appendChild(more);
+      }
+
+      cell.onclick = () => {
+        state.selectedDay = new Date(d);
+        updateModalTitle(new Date(d));
+        renderList();
+        openModal();
+      };
+
+      grid.appendChild(cell);
+    }
+  }
+
+  function renderList() {
+    const box = $("list");
+    box.innerHTML = "";
+
+    const day = state.selectedDay;
+    const evs = day ? eventsForDay(day) : filteredEvents().sort((a,b) => new Date(a.start)-new Date(b.start));
+
+    if (day) {
+      const h = document.createElement("div");
+      h.className = "tag";
+      h.textContent = `Tag: ${ymd(day)} (${evs.length} Termine)`;
+      box.appendChild(h);
+    } else {
+      const h = document.createElement("div");
+      h.className = "tag";
+      h.textContent = `Alle Termine (${evs.length})`;
+      box.appendChild(h);
+    }
+
+    for (const ev of evs) {
+      const item = document.createElement("div");
+      item.className = "event-item";
+      item.innerHTML = `
+        <div class="a">
+          <strong>${escapeHtml(ev.title || "(ohne Titel)")}</strong>
+          <button style="padding:6px 10px; border-radius:10px;">Bearbeiten</button>
+        </div>
+        <div class="tag">${escapeHtml(ev.allDay ? "Ganztägig" : new Date(ev.start).toLocaleString("de-DE"))}
+          ${ev.rrule ? " • Wiederholt" : ""}</div>
+        ${ev.location ? `<div class="tag">Ort: ${escapeHtml(ev.location)}</div>` : ""}
+        ${ev.notes ? `<div class="tag">Notiz: ${escapeHtml(ev.notes).slice(0,180)}${String(ev.notes).length>180?"…":""}</div>` : ""}
+      `;
+      item.querySelector("button").onclick = () => loadToForm(ev.id);
+      box.appendChild(item);
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function openNewEventForDay(dayDate) {
+    const d = new Date(dayDate);
+    const s = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0, 0);
+    const e = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 10, 0, 0, 0);
+    clearForm();
+    $("start").value = toLocalInput(s);
+    $("end").value = toLocalInput(e);
+  }
+
+  function clearForm() {
+    $("formTitle").textContent = "Neuer Termin";
+    $("id").value = "";
+    $("title").value = "";
+    $("start").value = "";
+    $("end").value = "";
+    $("allDay").value = "false";
+    $("rrule").value = "";
+    $("location").value = "";
+    $("notes").value = "";
+    $("deleteBtn").disabled = true;
+  }
+
+  function loadToForm(id) {
+    const ev = state.events.find(e => e.id === id);
+    if (!ev) return;
+    $("formTitle").textContent = "Termin bearbeiten";
+    $("id").value = ev.id;
+    $("title").value = ev.title ?? "";
+    $("start").value = toLocalInput(new Date(ev.start));
+    $("end").value = toLocalInput(new Date(ev.end));
+    $("allDay").value = String(!!ev.allDay);
+    $("rrule").value = ev.rrule ?? "";
+    $("location").value = ev.location ?? "";
+    $("notes").value = ev.notes ?? "";
+    $("deleteBtn").disabled = false;
+  }
+
+  async function saveFromForm() {
+    const id = $("id").value || uid();
+    const title = $("title").value.trim();
+    const allDay = $("allDay").value === "true";
+    const rrule = $("rrule").value || "";
+
+    let start = fromLocalInput($("start").value);
+    let end = fromLocalInput($("end").value);
+
+    if (!start || !end) {
+      alert("Bitte Start und Ende setzen.");
+      return;
+    }
+    if (end < start) {
+      alert("Ende muss nach Start liegen.");
+      return;
+    }
+
+    if (allDay) {
+      // Normalize to day bounds (simple)
+      start = startOfDay(start);
+      end = endOfDay(start);
+    }
+
+    const ev = {
+      id,
+      title: title || "(ohne Titel)",
+      start: start.toISOString(),
+      end: end.toISOString(),
+      allDay,
+      rrule,
+      location: $("location").value.trim(),
+      notes: $("notes").value.trim(),
+      updatedAt: Date.now()
+    };
+
+    await dbPut(ev);
+
+    if (navigator.onLine) {
+      try { await fbUpsert(ev); } catch (e) { console.warn("Firebase upsert failed:", e); }
+    }
+
+    await reload();
+    closeModal();
+  }
+
+  async function deleteFromForm() {
+    const id = $("id").value;
+    if (!id) return;
+    if (!confirm("Termin wirklich löschen?")) return;
+
+    await dbDelete(id);
+    if (navigator.onLine) {
+      try { await fbRemove(id); } catch (e) { console.warn("Firebase delete failed:", e); }
+    }
+    await reload();
+    closeModal();
+  }
+
+  async function exportICS() {
+    const evs = filteredEvents().sort((a,b) => new Date(a.start)-new Date(b.start));
+    const lines = [];
+    lines.push("BEGIN:VCALENDAR");
+    lines.push("VERSION:2.0");
+    lines.push("PRODID:-//MiniCalendar//DE");
+    for (const ev of evs) lines.push(eventToICS(ev));
+    lines.push("END:VCALENDAR");
+    const blob = new Blob([lines.join("\r\n") + "\r\n"], { type: "text/calendar;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "calendar.ics";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  async function reload() {
+    // Pull remote to local when online
+    if (navigator.onLine && fb.user) {
+      try { await fbPullToLocal(); } catch (e) { console.warn("Firebase pull failed:", e); }
+    }
+    state.events = await dbGetAll();
+    renderCalendar();
+    renderList();
+    renderDebug();
+  }
+
+  /********************
+   * Modal functions  *
+   ********************/
+  function openModal() {
+    $("dayModal").classList.add("show");
+    document.body.style.overflow = "hidden";
+    // Focus title field after modal animation
+    requestAnimationFrame(() => {
+      $("title").focus();
+    });
+  }
+
+  function closeModal() {
+    $("dayModal").classList.remove("show");
+    document.body.style.overflow = "";
+  }
+
+  function updateModalTitle(date) {
+    const dateStr = date ? date.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "Termin";
+    $("modalTitle").textContent = dateStr;
+  }
+
+  /********************
+   * 4) Wire events   *
+   *********************/
+  // Auth UI handlers
+  $("loginTab").onclick = () => {
+    $("loginTab").classList.add("active");
+    $("registerTab").classList.remove("active");
+    $("loginForm").style.display = "block";
+    $("registerForm").style.display = "none";
+    $("errorMsg").style.display = "none";
+  };
+
+  $("registerTab").onclick = () => {
+    $("registerTab").classList.add("active");
+    $("loginTab").classList.remove("active");
+    $("registerForm").style.display = "block";
+    $("loginForm").style.display = "none";
+    $("errorMsg").style.display = "none";
+    $("codeDisplay").style.display = "none";
+  };
+
+  $("loginBtn").onclick = async () => {
+    const email = $("loginEmail").value.trim();
+    const password = $("loginPassword").value;
+    
+    if (!email || !password) {
+      $("errorMsg").textContent = "Bitte E-Mail und Passwort eingeben.";
+      $("errorMsg").style.display = "block";
+      return;
+    }
+    
+    try {
+      $("loginBtn").disabled = true;
+      $("loginBtn").textContent = "Anmelden...";
+      await loginUser(email, password);
+      await reload();
+    } catch (error) {
+      $("errorMsg").textContent = "Anmeldung fehlgeschlagen: " + error.message;
+      $("errorMsg").style.display = "block";
+      $("loginBtn").disabled = false;
+      $("loginBtn").textContent = "Anmelden";
+    }
+  };
+
+  $("registerBtn").onclick = async () => {
+    const email = $("registerEmail").value.trim();
+    const password = $("registerPassword").value;
+    const passwordConfirm = $("registerPasswordConfirm").value;
+    
+    if (!email || !password || !passwordConfirm) {
+      $("errorMsg").textContent = "Bitte alle Felder ausfüllen.";
+      $("errorMsg").style.display = "block";
+      return;
+    }
+    
+    if (password !== passwordConfirm) {
+      $("errorMsg").textContent = "Passwörter stimmen nicht überein.";
+      $("errorMsg").style.display = "block";
+      return;
+    }
+    
+    if (password.length < 6) {
+      $("errorMsg").textContent = "Passwort muss mindestens 6 Zeichen lang sein.";
+      $("errorMsg").style.display = "block";
+      return;
+    }
+    
+    try {
+      $("registerBtn").disabled = true;
+      $("registerBtn").textContent = "Registrieren...";
+      const code = await registerUser(email, password);
+      
+      // Show personal code
+      $("personalCode").textContent = code;
+      $("codeDisplay").style.display = "block";
+      $("errorMsg").style.display = "none";
+      
+      // Auto-hide auth screen and load calendar after 5 seconds
+      setTimeout(async () => {
+        hideAuthScreen();
+        await reload();
+      }, 5000);
+    } catch (error) {
+      $("errorMsg").textContent = "Registrierung fehlgeschlagen: " + error.message;
+      $("errorMsg").style.display = "block";
+      $("registerBtn").disabled = false;
+      $("registerBtn").textContent = "Registrieren";
+    }
+  };
+
+  // Calendar UI handlers
+  $("prevBtn").onclick = async () => { state.cursor.setMonth(state.cursor.getMonth() - 1); renderCalendar(); };
+  $("nextBtn").onclick = async () => { state.cursor.setMonth(state.cursor.getMonth() + 1); renderCalendar(); };
+  $("todayBtn").onclick = async () => { state.cursor = new Date(); state.selectedDay = new Date(); await reload(); };
+  $("newBtn").onclick = () => { 
+    clearForm(); 
+    openNewEventForDay(new Date()); 
+    updateModalTitle(new Date());
+    openModal();
+  };
+
+  $("closeModal").onclick = () => closeModal();
+  $("dayModal").onclick = (e) => {
+    if (e.target === $("dayModal")) closeModal();
+  };
+
+  $("saveBtn").onclick = (e) => { e.preventDefault(); saveFromForm(); };
+  $("deleteBtn").onclick = (e) => { e.preventDefault(); deleteFromForm(); };
+  $("exportBtn").onclick = (e) => { e.preventDefault(); exportICS(); };
+
+  $("search").addEventListener("input", () => {
+    state.filter = $("search").value;
+    renderCalendar();
+    renderList();
+  });
+
+  // ESC key to close modal
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("dayModal").classList.contains("show")) {
+      closeModal();
+    }
+  });
+
+  window.addEventListener("online", async () => { updateNetStatus(); await reload(); });
+  window.addEventListener("offline", () => { updateNetStatus(); });
+
+  /********************
+   * 5) Start         *
+   ********************/
+  updateNetStatus();
+  // Initialize Firebase and check auth state
+  await ensureFirebase();
+  // Default: show selected day = today
+  state.selectedDay = new Date();
+  clearForm();
+  // Only reload if user is logged in
+  if (fb.user) {
+    await reload();
+  }
+</script>
+</body>
+</html>
